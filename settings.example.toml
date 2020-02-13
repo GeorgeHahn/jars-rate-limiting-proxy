@@ -1,0 +1,28 @@
+# JARS base configuration
+# Environment variable key names are listed for each setting.
+
+# JARS_LISTEN
+# Listen interface & port
+listen = "0.0.0.0:80"
+
+# JARS_BASE_PATH
+# Path to rewrite requests to
+# This can be reconfigured at runtime
+base_path = "127.0.0.1:8080"
+
+# JARS_ERROR_PATH
+# Error page to display when a resource is over-limit
+# This can be reconfigured at runtime
+error_path = "http://127.0.0.1:8080/error.html"
+
+# JARS_REDIS_URI
+# Redis connection (redis://<ip>:<port>/<db>)
+redis_uri = "redis://127.0.0.1:6379/"
+
+# JARS_ETCD_URIS
+# Etcd cluster for dynamic configuration
+etcd_uris = ["http://127.0.0.1:2379"]
+
+# JARS_ETCD_KEY_PREFIX
+# Etcd key prefix
+etcd_key_prefix = "jars_config_"

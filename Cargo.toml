@@ -1,0 +1,25 @@
+[package]
+name = "jars"
+version = "0.1.0"
+authors = ["George Hahn <george.hahn.vhs@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+async-trait = "0.1.24"
+bytes = "0.5"
+config = { version = "0.10", features = ["toml"] }
+etcd-rs = "0.2"
+futures = { version = "0.3"}
+futures-util = { version = "0.3"}
+headers = "0.3"
+http = "0.2"
+hyper = "0.13"
+lazy_static = "1.4"
+redis = { version = "0.15", features = ["tokio-rt-core"] }
+serde = "1.0"
+serde_derive = "1.0"
+tokio = { version = "0.2", features = ["full"] }
+
+[patch.crates-io]
+# Switches underlying watch tunnel to tokio RwLock + an experiment to reduce wordiness in watch API
+etcd-rs = { git = "https://github.com/georgehahn/etcd-rs", branch = "tokio-rwlock" }
