@@ -1,11 +1,21 @@
 # Jars: Just a rate-limiting service
 
-## Requirements
+Question: limit only path or path and query?
+
+
+## Configuration
+
+The base configuration is set by environment variables or files.
+
+Some parameters can be provided at runtime by Etcd.
+
+
+## Design
+### Requirements
 - Global rate limiting
 - Minimal latency impact
 - High throughput
 
-## Design
 ### Persistence
 
 Persistence will be used because global rate limiting is desired. Many high performance KV databases would be suitable for persistence. The chosen database will impact geographical scalability & runtime behavior. This service is written to support multiple database options, with Redis chosen for the initial implementation. Support for Apache Pulsar would be an interesting future development, but was deferred due to the lack of a mature Rust client library.

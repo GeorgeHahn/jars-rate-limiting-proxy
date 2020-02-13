@@ -21,6 +21,7 @@ etcd-rs = "0.2"
 async-trait = "0.1.24"
 cdrs = "2.2"
 
+serde = "*"
 slog = "*"
 pretty_env_logger = "*"
 log = "*"
