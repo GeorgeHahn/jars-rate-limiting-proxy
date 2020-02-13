@@ -1,0 +1,34 @@
+[package]
+name = "proxy"
+version = "0.1.0"
+authors = ["George Hahn <george.hahn@smartthings.com>"]
+edition = "2018"
+
+# TODO: Trim deps; this list has just about everything possible for airplane mode
+[dependencies]
+futures-util = { version = "0.3", features = ["compat"]}
+futures = { version = "0.3", features = ["compat"] }
+hyper = "0.13"
+tokio = { version = "0.2", features = ["full"] }
+statsd = "^0.9.0"
+http = "0.2"
+headers = "0.3"
+h2 = "0.2"
+tokio-util = "0.2"
+tracing = "0.1"
+redis = "0.15"
+etcd-rs = "0.2"
+async-trait = "0.1.24"
+cdrs = "2.2"
+
+slog = "*"
+pretty_env_logger = "*"
+log = "*"
+toml = "*"
+
+[dev-dependencies]
+criterion = "0.3"
+
+#[[bench]]
+#name = "my_benchmark"
+#harness = false
