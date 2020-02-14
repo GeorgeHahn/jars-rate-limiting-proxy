@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "type": "lldb",
+        "request": "launch",
+        "name": "Launch, LLDB debugger",
+        "args": [],
+        "program": "${workspaceFolder}/target/debug/proxy",
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "cargo-build-debug",
+        "stopOnEntry": false,
+        "sourceLanguages": ["rust"],
+        "sourceMap": {
+          "/rustc/*": "${env:HOME}/.rustup/toolchains/stable-x86_64-pc-windows-msvc/lib/rustlib/src/rust"
+        }
+      },
+      {
+        "name": "Launch, MSVC debugger",
+        "type": "cppvsdbg",
+        "request": "launch",
+        "program": "${workspaceFolder}/target/debug/proxy.exe",
+        "stopAtEntry": false,
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "cargo-build-debug",
+        "sourceFileMap": {
+          "/rustc/*": "${env:USERPROFILE}\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\src\\rust"
+        },
+        "symbolSearchPath": "https://msdl.microsoft.com/download/symbols",
+        "environment": []
+      }
+    ]
+  }

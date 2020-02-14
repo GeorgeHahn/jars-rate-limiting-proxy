@@ -1,0 +1,5 @@
+listen = "127.0.0.1:80"
+base_path = "127.0.0.1:81"
+error_path = "127.0.0.1:82/error.html"
+error_ttl = 3600
+# etcd_uri = ""

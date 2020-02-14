@@ -6,11 +6,17 @@ edition = "2018"
 
 # TODO: Trim deps; this list has just about everything possible for airplane mode
 [dependencies]
-futures-util = { version = "0.3", features = ["compat"]}
-futures = { version = "0.3", features = ["compat"] }
+futures-util = { version = "0.3"}
+futures = { version = "0.3"}
+config = { version = "0.10", features = ["toml"] }
 hyper = "0.13"
 tokio = { version = "0.2", features = ["full"] }
-statsd = "^0.9.0"
+lazy_static = "1.4"
+serde_derive = "1.0"
+serde = "1.0"
+bytes = "0.5"
+
+statsd = "0.13"
 http = "0.2"
 headers = "0.3"
 h2 = "0.2"
@@ -20,12 +26,10 @@ redis = "0.15"
 etcd-rs = "0.2"
 async-trait = "0.1.24"
 cdrs = "2.2"
-
-serde = "*"
-slog = "*"
-pretty_env_logger = "*"
-log = "*"
-toml = "*"
+slog = "2.5"
+pretty_env_logger = "0.4"
+log = "0.4"
+toml = "0.5"
 
 [dev-dependencies]
 criterion = "0.3"
@@ -33,3 +37,6 @@ criterion = "0.3"
 #[[bench]]
 #name = "my_benchmark"
 #harness = false
+
+[patch.crates-io]
+etcd-rs = { path = "../etcd-rs/" }

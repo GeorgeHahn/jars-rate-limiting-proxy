@@ -1,14 +1,10 @@
 # Jars: Just a rate-limiting service
 
-Question: limit only path or path and query?
-
-
 ## Configuration
 
-The base configuration is set by environment variables or files.
-
-Some parameters can be provided at runtime by Etcd.
-
+The base configuration is set by a file named `settings.toml` ([example](settings.example.toml)). This should be present in the working directory.
+Settings can be overridden using `JARS_` environment variables.
+Some parameters can be provided or modified at runtime by Etcd.
 
 ## Design
 ### Requirements
