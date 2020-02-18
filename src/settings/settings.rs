@@ -1,6 +1,6 @@
-use config::{Config, File, ConfigError, Environment};
-use std::net::SocketAddr;
+use config::{Config, ConfigError, Environment, File};
 use http::uri::Authority;
+use std::net::SocketAddr;
 
 #[derive(Deserialize, Debug)]
 pub struct SettingsSerdes {
@@ -38,27 +38,29 @@ pub struct Settings {
 impl Settings {
     pub fn load_and_validate() -> Settings {
         let mut settings = Config::default();
-        settings.merge(File::with_name("settings.toml").required(true)).unwrap_or_else(|e| {
-            println!("Settings file not found (looked for `settings.toml`)");
-            std::process::exit(1);
-        });
+        settings
+            .merge(File::with_name("settings.toml").required(true))
+            .unwrap_or_else(|e| {
+                println!("Settings file not found (looked for `settings.toml`)");
+                std::process::exit(1);
+            });
 
         // Env takes precedence. TODO: Verify that this is a reasonable decision & document it.
-        settings.merge(Environment::with_prefix("JARS")).unwrap_or_else(|e| {
-            println!("Error loading settings from environment");
-            std::process::exit(1);
-        });
+        settings
+            .merge(Environment::with_prefix("JARS"))
+            .unwrap_or_else(|e| {
+                println!("Error loading settings from environment");
+                std::process::exit(1);
+            });
 
         let settings: Result<SettingsSerdes, ConfigError> = settings.try_into();
 
         match settings {
-            Ok(mut res) => {
-                Self {
-                    listen: res.listen,
-                    base_path: res.base_path.parse().expect("invalid base_path"),
-                    error_path: res.error_path.parse().expect("invalid error_path"),
-                    error_ttl: res.error_ttl,
-                }
+            Ok(res) => Self {
+                listen: res.listen,
+                base_path: res.base_path.parse().expect("invalid base_path"),
+                error_path: res.error_path.parse().expect("invalid error_path"),
+                error_ttl: res.error_ttl,
             },
             Err(e) => {
                 println!("Unable to read settings file (invalid)");

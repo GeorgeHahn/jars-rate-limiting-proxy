@@ -1,5 +1,6 @@
 listen = "127.0.0.1:80"
 base_path = "127.0.0.1:81"
 error_path = "example.com"
+redis_uri = "127.0.0.1:6379"
 # error_ttl = 0
 # etcd_uri = ""
