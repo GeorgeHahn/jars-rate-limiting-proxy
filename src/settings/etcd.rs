@@ -22,14 +22,15 @@ impl ConfigProvider for EtcdConfigProvider {
         // The etcd-rs api leaves something to be desired. This uses an experimental refactoring
         // that is not (currently) upstreamed.
 
-        Ok(Box::new(
-            self.client
-                .watch(KeyRange::key("base_path"))
-                .filter_map(|val| async move {
-                    // TODO
-                    Some("".to_owned())
-                }),
-        ))
+        todo!("etcd")
+        // Ok(Box::new(
+        //     self.client
+        //         .watch(KeyRange::key("base_path"))
+        //         .filter_map(|val| async move {
+        //             // TODO
+        //             Some("".to_owned())
+        //         }),
+        // ))
     }
 }
 

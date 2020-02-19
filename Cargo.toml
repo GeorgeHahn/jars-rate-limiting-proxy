@@ -38,5 +38,5 @@ criterion = "0.3"
 #name = "my_benchmark"
 #harness = false
 
-[patch.crates-io]
-etcd-rs = { path = "../etcd-rs/" }
+# [patch.crates-io]
+# etcd-rs = { path = "../etcd-rs/" }
