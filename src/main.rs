@@ -7,29 +7,25 @@ extern crate serde_derive;
 mod settings;
 
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use futures_util::StreamExt;
+use futures_util::TryFutureExt;
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{client::HttpConnector, Body, Client as HyperClient, Request, Response, Server};
-use log::trace;
 use redis::AsyncCommands;
 use settings::Settings;
 use std::convert::Infallible;
 use std::error::Error;
 use std::net::SocketAddr;
-use std::sync::RwLock;
+use std::{time::Duration, sync::{Arc, RwLock}};
 use tokio::task;
 
 type Res<T> = Result<T, Box<dyn Error>>;
 
-lazy_static! {
-    static ref SETTINGS: RwLock<Settings> = RwLock::new(Settings::load_and_validate());
-}
-
 #[async_trait]
 trait RateLimitStore {
-    // TODO: is u32 the right option here?
-    async fn get(&mut self, path: &str) -> Res<u32>;
+    async fn under_limit(&mut self, path: &str, limit: u32) -> Res<bool>;
     async fn incr(&mut self, path: &str) -> Res<()>;
 }
 
@@ -38,8 +34,8 @@ struct RedisRateLimitStore {
 }
 
 impl RedisRateLimitStore {
-    pub async fn create() -> Res<RedisRateLimitStore> {
-        let client = redis::Client::open("redis://127.0.0.1/")?;
+    pub async fn create(uri: String) -> Res<RedisRateLimitStore> {
+        let client = redis::Client::open(uri)?;
         let connection = client.get_async_connection().await?;
         Ok(RedisRateLimitStore { connection })
     }
@@ -48,7 +44,7 @@ impl RedisRateLimitStore {
 #[async_trait]
 impl RateLimitStore for RedisRateLimitStore {
     /// TODO doc this
-    async fn get(&mut self, path: &str) -> Res<u32> {
+    async fn under_limit(&mut self, path: &str, limit: u32) -> Res<bool> {
         use std::time::SystemTime;
         use std::time::UNIX_EPOCH;
 
@@ -56,27 +52,41 @@ impl RateLimitStore for RedisRateLimitStore {
         // get path:timestamp_m
         // return moving average of the two
 
+        // Timestamp in minutes since the epoch. This may be confusing for someone looking
+        // directly at the redis keys
         let now_seconds = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
         let now_mins = now_seconds / 60;
         let previous_path = format!("{}:{}", path, now_mins - 1);
         let current_path = format!("{}:{}", path, now_mins);
 
         // TODO: dispatch these concurrently
-        let previous: u32 = self.connection.get(&previous_path)
-            .await.map_err(|e| {
-                println!("{}: {:?}", &previous_path, e);
-                e
-            }).unwrap_or(0);
+        // TODO: mark a 'should set expire' flag
         let current = self.connection.get(&current_path).await.unwrap_or(0);
+        if current >= limit {
+            // println!("Short circuit overlimit");
+            return Ok(false);
+        }
+        let previous: u32 = self
+            .connection
+            .get(&previous_path)
+            .await
+            .map_err(|e| {
+                // println!("{}: {:?}", &previous_path, e);
+                e
+            })
+            .unwrap_or(0);
 
         let seconds_into_this_minute = now_seconds % 60;
         let split = (60 - seconds_into_this_minute) as f32 / 60.0;
         let previous_split = split * (previous as f32);
         let mavg = previous_split + (current as f32);
 
-        println!("mavg: {}, previous: {}, current: {}", mavg, previous, current);
+        // println!(
+        //     "mavg: {}, previous: {}, current: {}",
+        //     mavg, previous, current
+        // );
 
-        Ok(mavg.ceil() as u32)
+        Ok((mavg.ceil() as u32) < limit)
     }
 
     /// Increments the redis key at path:timestamp_m
@@ -85,7 +95,15 @@ impl RateLimitStore for RedisRateLimitStore {
         use std::time::UNIX_EPOCH;
         let now_mins = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() / 60;
         let timestamped_path = format!("{}:{}", path, now_mins);
-        self.connection.incr(&timestamped_path, 1 as u32).await?;
+
+        // Increment current key and reset expiration to 2 minutes. This refreshes the
+        // expiration value on every increment, which is not necessary but should not have
+        // a significant performance impact.
+        redis::pipe()
+            .incr(&timestamped_path, 1 as u32)
+            .expire(&timestamped_path, 120 as usize)
+            .query_async(&mut self.connection)
+            .await?;
         Ok(())
     }
 }
@@ -117,6 +135,7 @@ fn set_proxy_headers(req: &mut Request<Body>, remote_addr: SocketAddr) {
 }
 
 async fn handle(
+    counter_store: Arc<Mutex<RedisRateLimitStore>>,
     client: HyperClient<HttpConnector>,
     remote_addr: SocketAddr,
     mut req: Request<Body>,
@@ -124,21 +143,22 @@ async fn handle(
     let uri = req.uri();
     let mut parts = uri.clone().into_parts();
 
-    let mut counter_store = RedisRateLimitStore::create().await.unwrap();
-
     let path = req.uri().path();
 
-    // todo: consider an in-process cache in front of counter_store to track blocks
-    if counter_store.get(path).await.unwrap() < 100 {
-        let path = path.to_owned();
+    let cs = counter_store.clone();
+    let mut counter_store = counter_store.lock().await;
 
+    // todo: consider an in-process cache in front of counter_store to track blocks (??)
+    if counter_store.under_limit(path, 100).await.unwrap() {
         // This ends up doing a whole lot more parsing and validation than we need. At a minimum, we
         // have to modify the request (to add appropriate headers), but the response should be streamed
         // verbatim. Not implemented here, but I suspect this could be done almost entirely in the
         // kernel with io_uring.
 
+        let path = path.to_owned();
+
         parts.scheme = Some("http".parse().unwrap());
-        parts.authority = Some(SETTINGS.read().unwrap().base_path.clone());
+        parts.authority = Some(Settings::get_base_path());
 
         // TODO only replace base path
         *req.uri_mut() = http::Uri::from_parts(parts).unwrap();
@@ -150,47 +170,50 @@ async fn handle(
         let response = client.request(req);
 
         // Stream response back to client
-        let (mut tx, body) = Body::channel();
-        task::spawn(async move {
-            // This is kind of the worst stream forwarder ever. Need to verify that it works.
-            let mut responsebody = response.await.unwrap().into_body();
-
-            while let Some(Ok(data)) = responsebody.next().await {
-                tx.send_data(data).await.expect("fwd data");
-            }
-        });
+        // This is kind of the worst stream forwarder ever. Need to verify that it works.
+        // -- this is super incorrect - it will strip response headers --
+        let response = response.await.unwrap();
 
         // Note: requests at the very end of a second will be counted towards the
         // next second's quota. This is considered acceptable.
-        let _ = counter_store.incr(&path).await.map_err(|e| println!("Unable to incr key {}: {:?}", &path, e));
-        Ok(hyper::Response::builder().body(body).unwrap())
+        let _ = task::spawn(async move {
+            let mut counter_store = cs.lock().await;
+            counter_store
+                .incr(&path)
+                .await
+                .map_err(|e| println!("Unable to incr key: {:?}", e))
+        });
+        Ok(response)
     } else {
         // TODO: pass error
         // TODO: Set local cache to 'blocked' and set tokio timer to unblock
         // TODO: cache error
 
         return Ok(hyper::Response::builder()
-            .status(200) // TODO get that value from hyper
-            .body(hyper::Body::from(format!("Rate limited\n\n{:?}\n\n{:?}", req.uri(), &req)))
+            .status(hyper::StatusCode::TOO_MANY_REQUESTS) // TODO get that value from hyper
+            .body(hyper::Body::from(format!(
+                "Rate limited\n\n{:?}\n\n{:?}",
+                req.uri(),
+                &req
+            )))
             .unwrap());
     }
 }
 
-struct RequestForwarder {
-    counter_store: RedisRateLimitStore,
-}
+struct RequestForwarder {}
 
 impl RequestForwarder {
-    pub fn create(counter_store: RedisRateLimitStore) -> Self {
-        Self { counter_store }
+    pub fn create() -> Self {
+        Self {}
     }
 
     pub async fn run(self) -> Res<()> {
-        // TODO: make this configurable
-        let addr = SocketAddr::from(([127, 0, 0, 1], 80));
+        let addr = SocketAddr::from(Settings::get_listen());
 
         // This client will be cloned for proxying below
-        let client = HyperClient::builder().keep_alive(false).build_http();
+        // Was having some issues with consuming ephemeral ports on my desktop; may be worth investigating
+        // potential pooling/keepalive issues here. (Does cloning this break pooling?)
+        let client = HyperClient::builder().keep_alive(true).keep_alive_timeout(Duration::from_secs(120)).build_http();
 
         // Set max buf size to something reasonable for streaming (hyper defaults to ~400k)
         // .http1_max_buf_size()
@@ -204,7 +227,19 @@ impl RequestForwarder {
             let c = client.clone();
             async move {
                 let c = c.clone();
-                Ok::<_, Infallible>(service_fn(move |body| handle(c.clone(), remote, body)))
+                let path = Settings::get_redis_uri();
+
+                // One rate limit connection per service instance (typically 1:1 with threads)
+                let redis = RedisRateLimitStore::create(path).await.unwrap();
+
+                // this mutex should have very low contention
+                let redis = Arc::new(Mutex::new(redis));
+
+                // TODO: consider implementing a real tower service
+                Ok::<_, Infallible>(service_fn(move |body| {
+                    let redis = redis.clone();
+                    handle(redis, c.clone(), remote, body)
+                }))
             }
         });
 
@@ -217,27 +252,13 @@ impl RequestForwarder {
     }
 }
 
-fn load_settings() {
-    // SETTINGS is lazily initialized; this line will cause load_and_validate to be called.
-    SETTINGS.read().unwrap();
-}
-
 #[tokio::main]
 async fn main() -> Res<()> {
-    load_settings();
+    Settings::load();
 
-    // TODO: subscribe to etcd settings updates
-    //     ConfigProviderEnum::Etcd => {
-    //         let config_path = static_config.get_etcd_uri();
-    //         // TODO: Etcd auth
-    //         // EtcdConfigProvider::create(..)
-    //         let provider = EtcdConfigProvider::connect();
-    //         Settings::with_provider(provider)?
-    //     }
-    // };
-
-    let redis = RedisRateLimitStore::create().await?;
-    let forwarder = RequestForwarder::create(redis);
+    // TODO: pass in a fn that creates RateLimitStore
+    // let create_redis = async || -> RedisRateLimitStore { RedisRateLimitStore::create(Settings::get_redis_uri()).await? };
+    let forwarder = RequestForwarder::create();
     forwarder.run().await?;
     Ok(())
 }
