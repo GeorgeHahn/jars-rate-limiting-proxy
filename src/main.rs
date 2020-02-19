@@ -211,6 +211,7 @@ impl RequestForwarder {
 
     pub async fn run(self) -> Res<()> {
         let addr: SocketAddr = Settings::get_listen();
+        println!("Listening on {}", addr);
 
         // This client will be cloned for proxying below
         // Was having some issues with consuming ephemeral ports on my desktop; may be worth investigating
