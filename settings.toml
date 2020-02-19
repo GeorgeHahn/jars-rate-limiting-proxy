@@ -1,6 +1,9 @@
-listen = "127.0.0.1:80"
-base_path = "127.0.0.1:81"
-error_path = "example.com"
-redis_uri = "127.0.0.1:6379"
+listen = "0.0.0.0:8080"
+base_path = "127.0.0.1:80"
+
+error_path = "127.0.0.1:80" # http://.. /error.html
 # error_ttl = 0
+
+redis_uri = "redis://127.0.0.1:6379/"
+
 # etcd_uri = ""
