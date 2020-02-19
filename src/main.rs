@@ -23,8 +23,10 @@ use tokio::task;
 
 type Res<T> = Result<T, Box<dyn Error>>;
 
+/// Generic rate limiting service
 #[async_trait]
 trait RateLimitStore {
+    /// Returns true if the rate limit has not been exceeded for the current minute
     async fn under_limit(&mut self, path: &str, limit: u32) -> Res<bool>;
     async fn incr(&mut self, path: &str) -> Res<()>;
 }
@@ -43,7 +45,7 @@ impl RedisRateLimitStore {
 
 #[async_trait]
 impl RateLimitStore for RedisRateLimitStore {
-    /// TODO doc this
+    /// Verify that moving average of calls to `path` is under `limit`
     async fn under_limit(&mut self, path: &str, limit: u32) -> Res<bool> {
         use std::time::SystemTime;
         use std::time::UNIX_EPOCH;
@@ -208,7 +210,7 @@ impl RequestForwarder {
     }
 
     pub async fn run(self) -> Res<()> {
-        let addr = SocketAddr::from(Settings::get_listen());
+        let addr: SocketAddr = Settings::get_listen();
 
         // This client will be cloned for proxying below
         // Was having some issues with consuming ephemeral ports on my desktop; may be worth investigating
