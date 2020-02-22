@@ -38,5 +38,10 @@ criterion = "0.3"
 #name = "my_benchmark"
 #harness = false
 
-# [patch.crates-io]
-# etcd-rs = { path = "../etcd-rs/" }
+# Not (yet) upstreamed API improvements to the etcd-rs crate
+[patch.crates-io]
+etcd-rs = { git = "https://github.com/GeorgeHahn/etcd-rs", branch = "less-verbose-api" }
+
+# Add debug symbols to release builds
+[profile.release]
+debug = true
